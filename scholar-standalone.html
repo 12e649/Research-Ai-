@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scholar: AI Research Assistant</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#faf8f4;--surface:#fff;--text:#1d1b18;--muted:#6b665e;--line:#e4dfd5;--accent:#2f5d50;--accent-text:#fff;--soft:#eaf1ee;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141614;--surface:#1c1f1d;--text:#ece8df;--muted:#9a958a;--line:#2e332f;--accent:#7fc0a8;--accent-text:#10201a;--soft:#222a26;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141614;--surface:#1c1f1d;--text:#ece8df;--muted:#9a958a;--line:#2e332f;--accent:#7fc0a8;--accent-text:#10201a;--soft:#222a26;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:28px 18px 56px}
+h1{font:600 2rem/1.15 Georgia,"Times New Roman",serif;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 22px}
+textarea{width:100%;min-height:110px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);font:inherit;resize:vertical}
+textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--text);padding:7px 13px;border-radius:999px;font:inherit;font-size:.9rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.go{width:100%;padding:13px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-text);font:600 1rem inherit;font-family:inherit;cursor:pointer}
+.go:disabled{opacity:.55}
+.ex{margin:18px 0 0;color:var(--muted);font-size:.9rem}
+.ex button{display:block;background:none;border:0;padding:4px 0;color:var(--accent);font:inherit;text-align:left;cursor:pointer}
+#out{margin-top:26px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px 18px 14px;display:none}
+#out h2{font:600 1.15rem Georgia,serif;margin:20px 0 6px;color:var(--accent)}
+#out p{margin:8px 0}#out ul{padding-left:20px;margin:6px 0}#out li{margin:4px 0}
+.tools{display:flex;gap:8px;margin-top:12px}
+.tools button{flex:1;padding:9px;border:1px solid var(--line);background:none;color:var(--text);border-radius:10px;font:inherit;font-size:.9rem;cursor:pointer}
+.note{margin-top:22px;padding:11px 14px;background:var(--soft);border-radius:10px;color:var(--muted);font-size:.85rem}
+.err{color:#b3261e;margin-top:14px}
+#fus .fu{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 18px}
+#fus .fq{font-weight:600;color:var(--accent)}
+#fq,#key{flex:1;min-width:0;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);font:inherit}
+#fq:focus{outline:2px solid var(--accent);outline-offset:1px}
+#fgo{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+#hist{margin-top:26px;display:none}
+#hist h3{font:600 .8rem inherit;font-family:inherit;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 8px;display:flex;justify-content:space-between;align-items:center}
+#hist h3 button{background:none;border:0;color:var(--muted);font:inherit;font-size:.8rem;text-transform:none;letter-spacing:0;cursor:pointer}
+#hist .h{display:block;width:100%;text-align:left;padding:10px 12px;margin-bottom:6px;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:10px;font:inherit;font-size:.9rem;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<main>
+<h1>Scholar</h1>
+<p class="sub">Ask a research question and get a structured brief: findings, debates, gaps, and where to look next.</p>
+
+<div class="row"><input id="key" type="password" placeholder="Anthropic API key (sk-ant-…)" autocomplete="off" aria-label="API key"><button class="chip" id="ksave">Save key</button></div>
+<textarea id="q" placeholder="e.g. What does the evidence say about intermittent fasting and longevity?" aria-label="Research question"></textarea>
+
+<div class="row" id="modes">
+<button class="chip" data-m="brief" aria-pressed="true">Quick brief</button>
+<button class="chip" data-m="deep" aria-pressed="false">Deep dive</button>
+<button class="chip" data-m="lit" aria-pressed="false">Literature map</button>
+<button class="chip" data-m="plan" aria-pressed="false">Study design</button>
+</div>
+
+<button class="go" id="go">Research this</button>
+<div class="ex">Try:
+<button>How do large language models handle long-context retrieval?</button>
+<button>Causes of the 2008 financial crisis: competing explanations</button>
+</div>
+<div id="err" class="err"></div>
+<section id="out" aria-live="polite"></section>
+<div id="fus"></div>
+<div class="row" id="fu" style="display:none"><input id="fq" placeholder="Ask a follow-up question…" aria-label="Follow-up question"><button class="chip" id="fgo">Ask</button></div>
+<div class="tools" id="tools" style="display:none">
+<button id="copy">Copy</button><button id="dl">Save as file</button>
+</div>
+<div id="hist"><h3><span>Recent research</span><button id="clr">Clear</button></h3><div id="hl"></div></div>
+<div class="note">Scholar answers from Claude’s training knowledge and does not browse the web. Your API key is stored only in this browser. Verify citations and figures against the original sources before relying on them.</div>
+</main>
+<script>
+(function(){
+var mode="brief",ctl=null,lastText="";
+var $=function(i){return document.getElementById(i)};
+var MODEL="claude-sonnet-5-5",KK="scholar-key";
+function getKey(){try{return localStorage.getItem(KK)||""}catch(e){return ""}}
+if(getKey())$("key").value="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+$("ksave").onclick=function(){var v=$("key").value.trim();if(!v||v.charAt(0)==="\u2022")return;try{localStorage.setItem(KK,v)}catch(e){}$("key").value="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";$("ksave").textContent="Saved";setTimeout(function(){$("ksave").textContent="Save key"},1500)};
+async function ask(input,opts){
+var key=getKey();if(!key){var e=new Error("no key");e.code="no_key";throw e}
+var msgs=typeof input==="string"?[{role:"user",content:input}]:input;
+var res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:opts&&opts.signal,headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:MODEL,max_tokens:2000,messages:msgs})});
+if(!res.ok){var er=new Error("api");er.code=res.status===401?"bad_key":res.status===429?"rate_limited":"api_error";throw er}
+var d=await res.json();var t=d.content.map(function(c){return c.text||""}).join("");
+if(opts&&opts.onText)opts.onText({text:t});return {text:t}}
+var MODES={
+brief:"Write a concise research brief (about 250 words). Sections: ## Short answer, ## Key findings (3–5 bullets), ## Caveats.",
+deep:"Write a thorough research report (about 700 words). Sections: ## Summary, ## Background, ## What the evidence shows, ## Competing views, ## Gaps and open questions, ## Where to look next (real search terms, journals, or author names to try).",
+lit:"Map the literature. Sections: ## Core themes, ## Landmark works and authors (only ones you are confident exist), ## Methods used in the field, ## Ongoing debates, ## Suggested search queries.",
+plan:"Help design a study. Sections: ## Research question refined, ## Hypotheses, ## Methodology, ## Data and measures, ## Risks and confounders, ## Ethics and limitations."
+};
+document.querySelectorAll(".chip").forEach(function(b){b.onclick=function(){
+mode=b.dataset.m;document.querySelectorAll(".chip").forEach(function(c){c.setAttribute("aria-pressed",c===b?"true":"false")})}});
+document.querySelectorAll(".ex button").forEach(function(b){b.onclick=function(){$("q").value=b.textContent;$("q").focus()}});
+
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function inline(s){return esc(s).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\*(.+?)\*/g,"<em>$1</em>")}
+function md(t){
+var out=[],inList=false;
+t.split("\n").forEach(function(l){
+var m;
+if(m=l.match(/^#{1,3}\s+(.*)/)){if(inList){out.push("</ul>");inList=false}out.push("<h2>"+inline(m[1])+"</h2>")}
+else if(m=l.match(/^\s*[-*•]\s+(.*)/)){if(!inList){out.push("<ul>");inList=true}out.push("<li>"+inline(m[1])+"</li>")}
+else if(l.trim()===""){if(inList){out.push("</ul>");inList=false}}
+else{if(inList){out.push("</ul>");inList=false}out.push("<p>"+inline(l)+"</p>")}});
+if(inList)out.push("</ul>");return out.join("")}
+
+var HK="scholar-history";
+function loadH(){try{return JSON.parse(localStorage.getItem(HK)||"[]")}catch(e){return []}}
+function saveH(q,t){try{var h=loadH().filter(function(x){return x.q!==q});h.unshift({q:q,t:t,m:mode});localStorage.setItem(HK,JSON.stringify(h.slice(0,10)))}catch(e){}renderHist()}
+function renderHist(){
+var h=loadH(),box=$("hist"),l=$("hl");l.textContent="";
+box.style.display=h.length?"block":"none";
+h.forEach(function(x){var b=document.createElement("button");b.className="h";b.textContent=x.q;
+b.onclick=function(){$("q").value=x.q;lastText=x.t;$("out").style.display="block";$("out").innerHTML=md(x.t);$("tools").style.display="flex";setThread(x.q,x.t);$("out").scrollIntoView({behavior:"smooth"})};l.appendChild(b)})}
+var SYS="You are Scholar, a careful research assistant. Be accurate and neutral. Never invent citations, statistics, or quotes: if unsure, say so. Use plain Markdown and no tables.";
+var thread=[];
+function setThread(q,t){thread=[{role:"user",content:SYS+"\n\nResearch question: "+q},{role:"assistant",content:t}];$("fus").textContent="";$("fu").style.display="flex"}
+$("fq").onkeydown=function(e){if(e.key==="Enter")$("fgo").click()};
+$("fgo").onclick=async function(){
+var fq=$("fq").value.trim();if(!fq||!thread.length)return;$("err").textContent="";
+var sample;sample=ask;
+if(!sample){$("err").textContent="The AI assistant isn’t available in this view.";return}
+var box=document.createElement("div");box.className="fu";
+var qh=document.createElement("div");qh.className="fq";qh.textContent=fq;
+var ah=document.createElement("div");ah.innerHTML="<p>Thinking…</p>";
+box.appendChild(qh);box.appendChild(ah);$("fus").appendChild(box);$("fq").value="";
+var btn=$("fgo");btn.disabled=true;
+try{
+var r=await sample(thread.concat([{role:"user",content:fq}]),{modelTier:"default",cache:false,onText:function(x){ah.innerHTML=md(x.text)}});
+ah.innerHTML=md(r.text);thread.push({role:"user",content:fq},{role:"assistant",content:r.text});
+lastText+="\n\n## Follow-up: "+fq+"\n\n"+r.text;
+}catch(e){ah.textContent="Couldn’t get an answer. Try again."}finally{btn.disabled=false}};
+$("clr").onclick=function(){try{localStorage.removeItem(HK)}catch(e){}renderHist()};
+$("go").onclick=async function(){
+var q=$("q").value.trim();$("err").textContent="";
+if(!q){$("err").textContent="Type a question first.";return}
+var sample;
+sample=ask;
+if(!sample){$("err").textContent="The AI assistant isn’t available in this view. Open the page from its claude.ai link while signed in.";return}
+if(ctl)ctl.abort();ctl=new AbortController();
+var btn=$("go");btn.disabled=true;btn.textContent="Researching…";
+var out=$("out");out.style.display="block";out.innerHTML="<p>Thinking…</p>";$("tools").style.display="none";$("fu").style.display="none";$("fus").textContent="";
+var prompt="You are Scholar, a careful research assistant. Be accurate and neutral. Never invent citations, statistics, or quotes: if unsure, say so and suggest how to verify. Use plain Markdown (## headings, - bullets, **bold**) and no tables.\n\nTask: "+MODES[mode]+"\n\nResearch question: "+q;
+try{
+var r=await sample(prompt,{signal:ctl.signal,modelTier:mode==="brief"?"quick":"default",cache:false,onText:function(x){lastText=x.text;out.innerHTML=md(x.text)}});
+lastText=r.text;out.innerHTML=md(r.text);$("tools").style.display="flex";saveH(q,r.text);setThread(q,r.text);
+}catch(e){
+if(e&&(e.code==="no_key"||e.code==="bad_key"))$("err").textContent="Add a valid Anthropic API key above and press Save key.";
+else if(e&&e.code==="rate_limited")$("err").textContent="Too many requests. Wait a moment and try again.";
+else if(!(e&&e.name==="AbortError"))$("err").textContent="Something went wrong. Please try again.";
+if(!lastText)out.style.display="none";
+}finally{btn.disabled=false;btn.textContent="Research this"}};
+
+$("copy").onclick=async function(){try{await navigator.clipboard.writeText(lastText);$("copy").textContent="Copied";setTimeout(function(){$("copy").textContent="Copy"},1500)}catch(e){$("err").textContent="Couldn’t copy. Select the text manually."}};
+$("dl").onclick=function(){var u=URL.createObjectURL(new Blob([lastText],{type:"text/markdown"}));var a=document.createElement("a");a.href=u;a.download="research-brief.md";a.click();setTimeout(function(){URL.revokeObjectURL(u)},1000)};
+renderHist();
+})();
+</script>
+</body>
+</html>
